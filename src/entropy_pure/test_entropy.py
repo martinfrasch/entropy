@@ -209,6 +209,23 @@ def test_surrogate():
     x_surr_phase = surrogate(x, method=1)
     assert x_surr_phase.shape == x.shape, "Phase surrogate should have same shape"
 
+    # Even and odd lengths: method 1 keeps the spectrum exactly, methods 3 and 4 keep the values exactly
+    for n in (100, 101):
+        xn = np.random.randn(1, n)
+        s1 = surrogate(xn, method=1)
+        np.testing.assert_allclose(np.abs(np.fft.rfft(s1[0])), np.abs(np.fft.rfft(xn[0])), atol=1e-9,
+                                   err_msg=f"Phase surrogate should keep the spectrum (n={n})")
+        for m in (3, 4):
+            np.testing.assert_array_equal(np.sort(surrogate(xn, method=m)[0]), np.sort(xn[0]),
+                                          err_msg=f"Method {m} should keep the values (n={n})")
+
+    # Method 2 is disabled (un-windowing blows up the series ends)
+    try:
+        surrogate(x, method=2)
+        raise AssertionError("Method 2 should raise NotImplementedError")
+    except NotImplementedError:
+        pass
+
     print("  PASSED\n")
 
 
