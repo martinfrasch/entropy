@@ -360,6 +360,16 @@ def compute_complexities(x: np.ndarray, n_embed: int = 1, stride: int = 1,
     return ApEn, SampEn
 
 
+def _random_phases(n_pts: int) -> np.ndarray:
+    """Uniform [0, 2*pi) phase shifts with conjugate symmetry (real inverse FFT), for even and odd n_pts."""
+    phases = np.random.uniform(0, 2 * np.pi, n_pts)
+    phases[0] = 0
+    if n_pts % 2 == 0:
+        phases[n_pts // 2] = 0
+    phases[n_pts // 2 + 1:] = -phases[1:(n_pts + 1) // 2][::-1]
+    return phases
+
+
 def surrogate(x: np.ndarray, method: int = 0, N_steps: int = 7) -> np.ndarray:
     """
     Create a surrogate version of the data.
@@ -372,7 +382,7 @@ def surrogate(x: np.ndarray, method: int = 0, N_steps: int = 7) -> np.ndarray:
         Surrogate method:
         - 0: shuffle (random permutation in time)
         - 1: randomize phase with unwindowed FFT
-        - 2: randomize phase with windowed FFT (buggy)
+        - 2: windowed FFT -- disabled, raises NotImplementedError (edge blow-up)
         - 3: randomize phase with Gaussian null hypothesis
         - 4: improved surrogate (same PDF and PSD)
         - 5: Gaussianize the signal
@@ -400,30 +410,15 @@ def surrogate(x: np.ndarray, method: int = 0, N_steps: int = 7) -> np.ndarray:
         for d in range(n_dims):
             fft_x = np.fft.fft(z[d, :])
             magnitudes = np.abs(fft_x)
-            phases = np.random.uniform(0, 2 * np.pi, n_pts)
-            # Ensure conjugate symmetry for real output
-            if n_pts % 2 == 0:
-                phases[n_pts // 2] = 0
-            phases[0] = 0
-            phases[n_pts // 2 + 1:] = -phases[1:n_pts // 2][::-1]
+            phases = _random_phases(n_pts)
             fft_new = magnitudes * np.exp(1j * phases)
             z[d, :] = np.real(np.fft.ifft(fft_new))
 
     elif method == 2:
-        # Randomize phase with windowed FFT (simplified)
-        window = np.hanning(n_pts)
-        for d in range(n_dims):
-            x_windowed = z[d, :] * window
-            fft_x = np.fft.fft(x_windowed)
-            magnitudes = np.abs(fft_x)
-            phases = np.random.uniform(0, 2 * np.pi, n_pts)
-            phases[0] = 0
-            if n_pts % 2 == 0:
-                phases[n_pts // 2] = 0
-            phases[n_pts // 2 + 1:] = -phases[1:n_pts // 2][::-1]
-            fft_new = magnitudes * np.exp(1j * phases)
-            z[d, :] = np.real(np.fft.ifft(fft_new)) / window
-            z[d, :] = np.nan_to_num(z[d, :], nan=0.0, posinf=0.0, neginf=0.0)
+        # Dividing by the window to undo it amplifies the series ends: the Hann window is 0 there, and phase
+        # randomisation spreads energy over the whole interval, so the edge samples blow up (x1e4-1e5 on AR(1)).
+        raise NotImplementedError("surrogate method 2 (windowed FFT) is disabled: un-windowing blows up the "
+                                  "series ends. Use method 1, 3 or 4.")
 
     elif method == 3:
         # AAFT (Amplitude Adjusted Fourier Transform)
@@ -439,11 +434,7 @@ def surrogate(x: np.ndarray, method: int = 0, N_steps: int = 7) -> np.ndarray:
             # Phase randomize the Gaussian
             fft_y = np.fft.fft(y)
             magnitudes = np.abs(fft_y)
-            phases = np.random.uniform(0, 2 * np.pi, n_pts)
-            phases[0] = 0
-            if n_pts % 2 == 0:
-                phases[n_pts // 2] = 0
-            phases[n_pts // 2 + 1:] = -phases[1:n_pts // 2][::-1]
+            phases = _random_phases(n_pts)
             fft_new = magnitudes * np.exp(1j * phases)
             y_surr = np.real(np.fft.ifft(fft_new))
             # Rescale to original amplitude distribution

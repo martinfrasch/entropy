@@ -291,7 +291,7 @@ print(f"SampEn(m=3): {SampEn[3]:.4f}")
 |----------|-------------|
 | `surrogate(x, method)` | Generate surrogate data |
 
-Methods: 0=shuffle, 1=phase randomize, 2=windowed FFT, 3=AAFT, 4=iterative AAFT, 5=Gaussianize
+Methods: 0=shuffle, 1=phase randomize, 2=windowed FFT (disabled: un-windowing blows up the series ends), 3=AAFT, 4=iterative AAFT, 5=Gaussianize
 
 ### Benchmark Utilities
 
